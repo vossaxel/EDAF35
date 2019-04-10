@@ -202,7 +202,7 @@ void run_program(char **argv, int argc, bool foreground, bool doing_pipe)
 
 		while (!access_flag && pathc--)
 		{
-			snprintf(buffer, MAXBUF, "%s/%s", paths->data, argv[0]);
+			snprintf(buffer, MAXBUF, "%s/%s", (char *)paths->data, argv[0]);
 			if (access(buffer, F_OK) == 0)
 				access_flag = true;
 
@@ -222,7 +222,7 @@ void run_program(char **argv, int argc, bool foreground, bool doing_pipe)
 		if (foreground) //not wait when using pipes??
 		{
 			int status;
-			waitpid(pid, status, 0);
+			waitpid(pid, &status, 0);
 		}
 	}
 }
