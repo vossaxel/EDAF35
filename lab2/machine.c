@@ -158,8 +158,8 @@ static unsigned fifo_page_replace()
 
 static unsigned second_chance_replace()
 {
-	static int page;
-
+	static int page= -1;
+	page = (page +1) %RAM_PAGES;
 	while (coremap[page].owner != NULL && coremap[page].owner->referenced)
 	{
 		coremap[page].owner->referenced = 0;
