@@ -77,6 +77,7 @@ typedef struct
 } coremap_entry_t;
 
 static unsigned long long num_pagefault;	  /* Statistics. */
+static unsigned long long num_diskwrite;	  /* Statistics. */
 static page_table_entry_t page_table[NPAGES]; /* OS data structure. */
 static coremap_entry_t coremap[RAM_PAGES];	/* OS data structure. */
 static unsigned memory[RAM_SIZE];			  /* Hardware: RAM. */
@@ -146,7 +147,7 @@ static unsigned new_swap_page()
 
 static unsigned fifo_page_replace()
 {
-	int page;
+	static int page;
 
 	page = (page + 1) % RAM_PAGES;
 
@@ -157,11 +158,24 @@ static unsigned fifo_page_replace()
 
 static unsigned second_chance_replace()
 {
-	int page;
+	static int page;
 
-	page = INT_MAX;
+	while (coremap[page].owner != NULL && coremap[page].owner->referenced)
+	{
+		coremap[page].owner->referenced = 0;
+		page = (page + 1) % RAM_PAGES;
+		assert(page < RAM_PAGES);
+	}
 
-	assert(page < RAM_PAGES);
+	return page;
+}
+
+static unsigned optimal_replace()
+{
+	int sequence[20] = {0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 7, 6, 5, 0, 0, 0, 0, 1, 0, 1};
+	static int pos;
+
+	return sequence[pos++];
 }
 
 static unsigned take_phys_page()
@@ -169,22 +183,52 @@ static unsigned take_phys_page()
 	unsigned page; /* Page to be replaced. */
 
 	page = (*replace)();
-	printf("\n->take_phys_page->%d\n", page);
+	printf("take_phys_page %d\n", page);
 
 	return page;
 }
 
 static void pagefault(unsigned virt_page)
 {
-	printf("\n->pagefault(%d)\n", virt_page);
+	printf("pagefault(%d)\n", virt_page);
 	unsigned page;
 
 	num_pagefault += 1;
 
 	page = take_phys_page();
 
-	coremap[page].owner = &page_table[virt_page];
+	if (coremap[page].owner != NULL)
+	{
+		if (coremap[page].owner->modified)
+		{
+			if (coremap[page].owner->ondisk)
+			{
+				write_page(page, coremap[page].page);
+				printf("Write page %d to disk\n", coremap[page].page);
+			}
+			else
+			{
+				unsigned swap_page = new_swap_page();
+				write_page(page, swap_page);
+				printf("Write page %d to disk (swap)\n", swap_page);
+				coremap[page].page = swap_page;
+			}
+			num_diskwrite++;
+			coremap[page].owner->ondisk = 1;
+			coremap[page].owner->modified = 0;
+		}
+		coremap[page].owner->page = coremap[page].page;
+		coremap[page].owner->inmemory = 0;
+	}
+
+	if (page_table[virt_page].ondisk)
+	{
+		printf("Reading page %d from disk\n", virt_page);
+		read_page(page, page_table[virt_page].page);
+	}
+
 	coremap[page].page = page_table[virt_page].page;
+	coremap[page].owner = &page_table[virt_page];
 	page_table[virt_page].inmemory = 1;
 	page_table[virt_page].page = page;
 }
@@ -193,7 +237,6 @@ static void translate(unsigned virt_addr, unsigned *phys_addr, bool write)
 {
 	unsigned virt_page;
 	unsigned offset;
-
 	virt_page = virt_addr / PAGESIZE;
 	offset = virt_addr & (PAGESIZE - 1);
 
@@ -495,6 +538,11 @@ int main(int argc, char **argv)
 			replace = fifo_page_replace;
 			printf("FIFO page replacement algorithm.\n");
 		}
+		else if (!strcmp(argv[1], "--opt"))
+		{
+			replace = optimal_replace;
+			printf("Optimal page replacement algorithm.\n");
+		}
 		else
 		{
 			printf("Unknown page replacement algorithm.\n");
@@ -510,4 +558,5 @@ int main(int argc, char **argv)
 	run(argc, argv);
 
 	printf("%llu page faults\n", num_pagefault);
+	printf("%llu disk writes\n", num_diskwrite);
 }

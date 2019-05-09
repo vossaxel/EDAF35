@@ -13,5 +13,8 @@ run-fifo : machine
 run-sc : machine
 	./machine --second-chance fac.s
 
+run-opt : machine
+	./machine --opt fac.s
+
 clean :
 	rm -f machine
