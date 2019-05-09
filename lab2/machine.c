@@ -152,7 +152,7 @@ static unsigned fifo_page_replace()
 
 	assert(page < RAM_PAGES);
 
-	return page
+	return page;
 }
 
 static unsigned second_chance_replace()
