@@ -6,35 +6,35 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define NREG		(32)
-#define PAGESIZE_WIDTH	(2)
-#define PAGESIZE	(1<<PAGESIZE_WIDTH)
-#define NPAGES		(2048)
-#define RAM_PAGES	(8)
-#define RAM_SIZE	(RAM_PAGES * PAGESIZE)
-#define SWAP_PAGES	(128)
-#define SWAP_SIZE	(SWAP_PAGES * PAGESIZE)
+#define NREG (32)
+#define PAGESIZE_WIDTH (2)
+#define PAGESIZE (1 << PAGESIZE_WIDTH)
+#define NPAGES (2048)
+#define RAM_PAGES (8)
+#define RAM_SIZE (RAM_PAGES * PAGESIZE)
+#define SWAP_PAGES (128)
+#define SWAP_SIZE (SWAP_PAGES * PAGESIZE)
 #undef DEBUG
 
-#define ADD	(0)
-#define ADDI	(1)
-#define SUB	(2)
-#define SUBI	(3)
-#define SGE	(4)
-#define SGT	(5)
-#define SEQ	(6)
-#define BT      (7)
-#define BF      (8)
-#define BA      (9)
-#define ST      (10)
-#define LD      (11)
-#define CALL	(12)
-#define JMP	(13)
-#define MUL	(14)
-#define SEQI	(15)
-#define HALT    (16)
+#define ADD (0)
+#define ADDI (1)
+#define SUB (2)
+#define SUBI (3)
+#define SGE (4)
+#define SGT (5)
+#define SEQ (6)
+#define BT (7)
+#define BF (8)
+#define BA (9)
+#define ST (10)
+#define LD (11)
+#define CALL (12)
+#define JMP (13)
+#define MUL (14)
+#define SEQI (15)
+#define HALT (16)
 
-char*	mnemonics[] = {
+char *mnemonics[] = {
 	[ADD] = "add",
 	[ADDI] = "addi",
 	[SUB] = "sub",
@@ -54,31 +54,34 @@ char*	mnemonics[] = {
 	[HALT] = "halt",
 };
 
-typedef struct {
-	unsigned	pc;		/* Program counter. */
-	unsigned	reg[NREG];	/* Registers. */
+typedef struct
+{
+	unsigned pc;		/* Program counter. */
+	unsigned reg[NREG]; /* Registers. */
 } cpu_t;
 
-typedef struct {
-	unsigned int	page:27;	/* Swap or RAM page. */
-	unsigned int	inmemory:1;	/* Page is in memory. */
-	unsigned int	ondisk:1;	/* Page is on disk. */
-	unsigned int	modified:1;	/* Page was modified while in memory. */
-	unsigned int	referenced:1;	/* Page was referenced recently. */
-	unsigned int	readonly:1;	/* Error if written to (not checked). */
+typedef struct
+{
+	unsigned int page : 27;		 /* Swap or RAM page. */
+	unsigned int inmemory : 1;   /* Page is in memory. */
+	unsigned int ondisk : 1;	 /* Page is on disk. */
+	unsigned int modified : 1;   /* Page was modified while in memory. */
+	unsigned int referenced : 1; /* Page was referenced recently. */
+	unsigned int readonly : 1;   /* Error if written to (not checked). */
 } page_table_entry_t;
 
-typedef struct {
-	page_table_entry_t*	owner;	/* Owner of this phys page. */
-	unsigned		page;	/* Swap page of page if assigned. */
+typedef struct
+{
+	page_table_entry_t *owner; /* Owner of this phys page. */
+	unsigned page;			   /* Swap page of page if assigned. */
 } coremap_entry_t;
 
-static unsigned long long	num_pagefault;		/* Statistics. */
-static page_table_entry_t	page_table[NPAGES];	/* OS data structure. */
-static coremap_entry_t		coremap[RAM_PAGES];	/* OS data structure. */
-static unsigned			memory[RAM_SIZE];	/* Hardware: RAM. */
-static unsigned			swap[SWAP_SIZE];	/* Hardware: disk. */
-static unsigned			(*replace)(void);	/* Page repl. alg. */
+static unsigned long long num_pagefault;	  /* Statistics. */
+static page_table_entry_t page_table[NPAGES]; /* OS data structure. */
+static coremap_entry_t coremap[RAM_PAGES];	/* OS data structure. */
+static unsigned memory[RAM_SIZE];			  /* Hardware: RAM. */
+static unsigned swap[SWAP_SIZE];			  /* Hardware: disk. */
+static unsigned (*replace)(void);			  /* Page repl. alg. */
 
 int x;
 
@@ -107,10 +110,10 @@ signed extract_constant(unsigned instr)
 	return (short)(instr & 0xffff);
 }
 
-void error(char* fmt, ...)
+void error(char *fmt, ...)
 {
-	va_list		ap;
-	char		buf[BUFSIZ];
+	va_list ap;
+	char buf[BUFSIZ];
 
 	va_start(ap, fmt);
 	vsprintf(buf, fmt, ap);
@@ -121,20 +124,20 @@ void error(char* fmt, ...)
 static void read_page(unsigned phys_page, unsigned swap_page)
 {
 	memcpy(&memory[phys_page * PAGESIZE],
-		&swap[swap_page * PAGESIZE],
-		PAGESIZE * sizeof(unsigned));
+		   &swap[swap_page * PAGESIZE],
+		   PAGESIZE * sizeof(unsigned));
 }
 
 static void write_page(unsigned phys_page, unsigned swap_page)
 {
 	memcpy(&swap[swap_page * PAGESIZE],
-		&memory[phys_page * PAGESIZE],
-		PAGESIZE * sizeof(unsigned));
+		   &memory[phys_page * PAGESIZE],
+		   PAGESIZE * sizeof(unsigned));
 }
 
 static unsigned new_swap_page()
 {
-	static int 		count;
+	static int count;
 
 	assert(count < SWAP_PAGES);
 
@@ -143,16 +146,18 @@ static unsigned new_swap_page()
 
 static unsigned fifo_page_replace()
 {
-	int	page;
+	int page;
 
-	page = INT_MAX;
+	page = (page + 1) % RAM_PAGES;
 
 	assert(page < RAM_PAGES);
+
+	return page
 }
 
 static unsigned second_chance_replace()
 {
-	int	page;
+	int page;
 
 	page = INT_MAX;
 
@@ -161,26 +166,33 @@ static unsigned second_chance_replace()
 
 static unsigned take_phys_page()
 {
-	unsigned		page;	/* Page to be replaced. */
+	unsigned page; /* Page to be replaced. */
 
 	page = (*replace)();
+	printf("\n->take_phys_page->%d\n", page);
 
 	return page;
 }
 
 static void pagefault(unsigned virt_page)
 {
-	unsigned		page;
+	printf("\n->pagefault(%d)\n", virt_page);
+	unsigned page;
 
 	num_pagefault += 1;
 
 	page = take_phys_page();
+
+	coremap[page].owner = &page_table[virt_page];
+	coremap[page].page = page_table[virt_page].page;
+	page_table[virt_page].inmemory = 1;
+	page_table[virt_page].page = page;
 }
 
-static void translate(unsigned virt_addr, unsigned* phys_addr, bool write)
+static void translate(unsigned virt_addr, unsigned *phys_addr, bool write)
 {
-	unsigned	virt_page;
-	unsigned	offset;
+	unsigned virt_page;
+	unsigned offset;
 
 	virt_page = virt_addr / PAGESIZE;
 	offset = virt_addr & (PAGESIZE - 1);
@@ -196,34 +208,34 @@ static void translate(unsigned virt_addr, unsigned* phys_addr, bool write)
 	*phys_addr = page_table[virt_page].page * PAGESIZE + offset;
 }
 
-static unsigned read_memory(unsigned* memory, unsigned addr)
+static unsigned read_memory(unsigned *memory, unsigned addr)
 {
-	unsigned	phys_addr;
+	unsigned phys_addr;
 
 	translate(addr, &phys_addr, false);
 
 	return memory[phys_addr];
 }
 
-static void write_memory(unsigned* memory, unsigned addr, unsigned data)
+static void write_memory(unsigned *memory, unsigned addr, unsigned data)
 {
-	unsigned	phys_addr;
+	unsigned phys_addr;
 
 	translate(addr, &phys_addr, true);
 
 	memory[phys_addr] = data;
 }
 
-void read_program(char* file, unsigned memory[], int* ninstr)
+void read_program(char *file, unsigned memory[], int *ninstr)
 {
-	FILE*		in;
-	int		opcode;
-	int		a, b, c;
-	int		i;
-	char		buf[BUFSIZ];
-	char		text[BUFSIZ];
-	int		n;
-	int		line;
+	FILE *in;
+	int opcode;
+	int a, b, c;
+	int i;
+	char buf[BUFSIZ];
+	char text[BUFSIZ];
+	int n;
+	int line;
 
 	/* Find out the number of mnemonics. */
 	n = sizeof mnemonics / sizeof mnemonics[0];
@@ -235,7 +247,8 @@ void read_program(char* file, unsigned memory[], int* ninstr)
 
 	line = 0;
 
-	while (fgets(buf, sizeof buf, in) != NULL) {
+	while (fgets(buf, sizeof buf, in) != NULL)
+	{
 		if (buf[0] == ';')
 			continue;
 
@@ -244,8 +257,10 @@ void read_program(char* file, unsigned memory[], int* ninstr)
 
 		opcode = -1;
 
-		for (i = 0; i < n; ++i) {
-			if (strcmp(text, mnemonics[i]) == 0) {
+		for (i = 0; i < n; ++i)
+		{
+			if (strcmp(text, mnemonics[i]) == 0)
+			{
 				opcode = i;
 				break;
 			}
@@ -262,25 +277,25 @@ void read_program(char* file, unsigned memory[], int* ninstr)
 	*ninstr = line;
 }
 
-int run(int argc, char** argv)
+int run(int argc, char **argv)
 {
-	char*		file;
-	cpu_t		cpu;
-	int		i;
-	int		j;
-	int		ninstr;
-	unsigned	instr;
-	unsigned	opcode;
-	unsigned	source_reg1;
-	int		constant;
-	unsigned	dest_reg;
-	int		source1;
-	int		source2;
-	int		dest;
-	unsigned	data;
-	bool		proceed;
-	bool		increment_pc;
-	bool		writeback;
+	char *file;
+	cpu_t cpu;
+	int i;
+	int j;
+	int ninstr;
+	unsigned instr;
+	unsigned opcode;
+	unsigned source_reg1;
+	int constant;
+	unsigned dest_reg;
+	int source1;
+	int source2;
+	int dest;
+	unsigned data;
+	bool proceed;
+	bool increment_pc;
+	bool writeback;
 
 	if (argc > 2)
 		file = argv[2];
@@ -295,7 +310,8 @@ int run(int argc, char** argv)
 
 	proceed = true;
 
-	while (proceed) {
+	while (proceed)
+	{
 
 		/* Fetch next instruction to execute. */
 		instr = read_memory(memory, cpu.pc);
@@ -308,14 +324,15 @@ int run(int argc, char** argv)
 
 		/* Fetch operands. */
 		source1 = cpu.reg[source_reg1];
-		source2 = cpu.reg[constant & (NREG-1)];
+		source2 = cpu.reg[constant & (NREG - 1)];
 
 		increment_pc = true;
 		writeback = true;
 
 		printf("pc = %3d: ", cpu.pc);
 
-		switch (opcode) {
+		switch (opcode)
+		{
 		case ADD:
 			puts("ADD");
 			dest = source1 + source2;
@@ -364,7 +381,8 @@ int run(int argc, char** argv)
 		case BT:
 			puts("BT");
 			writeback = false;
-			if (source1 != 0) {
+			if (source1 != 0)
+			{
 				cpu.pc = constant;
 				increment_pc = false;
 			}
@@ -373,7 +391,8 @@ int run(int argc, char** argv)
 		case BF:
 			puts("BF");
 			writeback = false;
-			if (source1 == 0) {
+			if (source1 == 0)
+			{
 				cpu.pc = constant;
 				increment_pc = false;
 			}
@@ -423,7 +442,7 @@ int run(int argc, char** argv)
 
 		default:
 			error("illegal instruction at pc = %d: opcode = %d\n",
-				cpu.pc, opcode);
+				  cpu.pc, opcode);
 		}
 
 		if (writeback && dest_reg != 0)
@@ -434,8 +453,10 @@ int run(int argc, char** argv)
 
 #ifdef DEBUG
 		i = 0;
-		while (i < NREG) {
-			for (j = 0; j < 4; ++j, ++i) {
+		while (i < NREG)
+		{
+			for (j = 0; j < 4; ++j, ++i)
+			{
 				if (j > 0)
 					printf("| ");
 				printf("R%02d = %-12d", i, cpu.reg[i]);
@@ -446,34 +467,42 @@ int run(int argc, char** argv)
 	}
 
 	i = 0;
-	while (i < NREG) {
-		for (j = 0; j < 4; ++j, ++i) {
+	while (i < NREG)
+	{
+		for (j = 0; j < 4; ++j, ++i)
+		{
 			if (j > 0)
 				printf("| ");
 			printf("R%02d = %-12d", i, cpu.reg[i]);
 		}
 		printf("\n");
-
-
 	}
 	return 0;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
 	replace = fifo_page_replace;
-	if (argc >= 2) {
-		if(!strcmp(argv[1], "--second-chance")) {
+	if (argc >= 2)
+	{
+		if (!strcmp(argv[1], "--second-chance"))
+		{
 			replace = second_chance_replace;
 			printf("Second change page replacement algorithm.\n");
-		} else if (!strcmp(argv[1], "--fifo")) {
+		}
+		else if (!strcmp(argv[1], "--fifo"))
+		{
 			replace = fifo_page_replace;
 			printf("FIFO page replacement algorithm.\n");
-		} else {
+		}
+		else
+		{
 			printf("Unknown page replacement algorithm.\n");
 			return -1;
 		}
-	} else {
+	}
+	else
+	{
 		printf("Not enough arguments.\n");
 		return -1;
 	}
