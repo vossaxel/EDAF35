@@ -183,6 +183,27 @@ void run_program(char **argv, int argc, bool foreground, bool doing_pipe)
 	 * 
 	 */
 
+	
+	if(strcmp(argv[0], "cd") == 0)
+	{
+		char * temp = getenv("PWD");
+		if(strcmp(argv[1], "-") == 0)
+		{
+			
+			chdir(getenv("OLDPWD"));
+						
+		}
+		else if(chdir(argv[1]) != 0)
+		{
+			error("could not change dir");		
+	
+		}else
+		{
+			setenv("OLDPWD", temp,1);
+		}		
+	}
+
+
 	pid_t pid;
 	pid = fork();
 
@@ -288,6 +309,12 @@ void parse_line(void)
 		case PIPE:
 			doing_pipe = true;
 
+			if(pipe(pipe_fd) ==-1)
+			{
+				error("pipe failed");
+				return;
+			}
+			output_fd = pipe_fd[1];
 			/*FALLTHROUGH*/
 
 		case AMPERSAND:
