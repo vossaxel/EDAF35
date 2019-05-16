@@ -1,0 +1,25 @@
+stat:
+returns a stat structure with information about a file.
+
+rename:
+renames a file, any hard links to the file are unaffected.
+
+returns 0 on success, -1 on error.
+
+truncate:
+truncates a file to be of precisely a set length of bytes. 
+Any extra bytes are lost and "missing" bytes reads as null bytes ('\0').
+
+returns 0 on success, -1 on error.
+
+unlink:
+delete a name from the filesystem. If that name was the last link to a file
+the file is deleted.
+
+returns 0 on success, -1 on error
+
+lseek
+
+
+--/usr/include/fuse/fuse.h--
+gettattr readdir read, write, cmod, truncate, rename, unlink, create
