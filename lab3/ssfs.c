@@ -29,6 +29,8 @@
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
+static time_t check_time;
+
 // The attributes should come from the directory entry.
 // TODO: [DIR_ENTRY] add last "m"odification time to the entry and handle it properly
 static int do_getattr(const char *path, struct stat *st)
@@ -46,15 +48,18 @@ static int do_getattr(const char *path, struct stat *st)
 	//						as no process still holds it open. Symbolic links are not counted in the total.
 	//		st_size:	This specifies the size of a regular file in bytes. For files that are really devices this field isn’t usually meaningful. For symbolic links this specifies the length of the file name the link refers to.
 
-	st->st_uid = getuid();		 // The owner of the file/directory is the user who mounted the filesystem
-	st->st_gid = getgid();		 // The group of the file/directory is the same as the group of the user who mounted the filesystem
+	st->st_uid = getuid();	 // The owner of the file/directory is the user who mounted the filesystem
+	st->st_gid = getgid();	 // The group of the file/directory is the same as the group of the user who mounted the filesystem
 	st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
 	st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
+
+	check_time = time(NULL);
 
 	if (strcmp(path, "/") == 0)
 	{
 		st->st_mode = S_IFDIR | 0755;
 		st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
+		st->st_mtime = check_time;
 	}
 	else
 	{
@@ -91,7 +96,7 @@ static int do_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, of
 {
 	printf("--> Getting The List of Files of %s\n", path);
 
-	filler(buffer, ".", NULL, 0);	// Current Directory
+	filler(buffer, ".", NULL, 0);  // Current Directory
 	filler(buffer, "..", NULL, 0); // Parent Directory
 
 	if (strcmp(path, "/") == 0) // If the user is trying to show the files/directories of the root directory show the following
@@ -144,19 +149,44 @@ static int do_read(const char *path, char *buffer, size_t size, off_t offset, st
 	dir_entry *de = index2dir_entry(di);
 	unsigned bid = de->first_block;
 
+	// TODO: [READ_OFFSET] account for the offset! May need to traverse the blocks of this file
+	// until the block holding the right offset. Have a look at do_write.
+
+	// load the block map
+	unsigned short *bmap = load_blockmap();
+
+	// first figure out where the write starts (offset in blocks)
+	unsigned short blkoffs = offset / BLOCK_SIZE;
+	// offset within that block
+	unsigned short byteoffs = offset % BLOCK_SIZE;
+
+	while (blkoffs)
+	{
+		// not yet in the right block.
+		if (bmap[bid] != EOF_BLOCK)
+		{
+			// follow the link
+			bid = bmap[bid];
+		}
+		else
+		{
+			printf("   out of free blocks!\n");
+			return -ENOSPC;
+		}
+		blkoffs--;
+	}
+
 	char bcache[BLOCK_SIZE];
 	// ... //
 	// reads the block into the cache
 	readBlock(bid, bcache);
 	// cannot read all maybe?
-	size_t rsize = min(size, BLOCK_SIZE);
+	size_t rsize = min(size, BLOCK_SIZE - byteoffs);
 	// ... //
 
 	// we now fill the buffer with this block contents
-	// TODO: [READ_OFFSET] account for the offset! May need to traverse the blocks of this file
-	// until the block holding the right offset. Have a look at do_write.
 
-	memcpy(buffer, bcache, rsize);
+	memcpy(buffer, bcache + byteoffs, rsize);
 
 	// how much did we read?
 	return rsize;
@@ -367,7 +397,7 @@ static int do_rename(const char *opath, const char *npath)
 	if (ndi > 0)
 	{
 		//if a file with the same filename is found its unlinked. (removes the file)
-		unlink(npath)
+		do_unlink(npath);
 	}
 
 	const char *ofn = &opath[1];
@@ -384,6 +414,20 @@ static int do_rename(const char *opath, const char *npath)
 static int do_unlink(const char *path)
 {
 	printf("--> Trying to remove %s\n", path);
+
+	load_directory();
+
+	// skip the "/" in the begining
+	const char *fn = &path[1];
+
+	// search for the dir block of given file
+	int di = find_dir_entry(fn);
+
+	if (di < 0)
+	{
+		return -ENOENT;
+	}
+	do_truncate(path, 0);
 
 	return 0; // reports success, but does nothing
 }
@@ -435,25 +479,25 @@ static int do_access(const char *path, int ai) {
 */
 
 static struct fuse_operations operations = {
-		.getattr = do_getattr,
-		.readdir = do_readdir,
-		.read = do_read,
-		.destroy = do_destroy,
-		.write = do_write,
-		// just monitoring these for now
-		.chown = do_chown,
-		.utimens = do_utimens,
-		// to make write work
-		.chmod = do_chmod,
-		// needed for write, also called before open on creation
-		.truncate = do_truncate,
-		// to implement
-		.rename = do_rename,
-		.unlink = do_unlink, // implements remove
-												 //  .mknod = do_mknod,
-		.create = do_create,
-		//  .open = do_open,
-		//  .access = do_access,
+	.getattr = do_getattr,
+	.readdir = do_readdir,
+	.read = do_read,
+	.destroy = do_destroy,
+	.write = do_write,
+	// just monitoring these for now
+	.chown = do_chown,
+	.utimens = do_utimens,
+	// to make write work
+	.chmod = do_chmod,
+	// needed for write, also called before open on creation
+	.truncate = do_truncate,
+	// to implement
+	.rename = do_rename,
+	.unlink = do_unlink, // implements remove
+						 //  .mknod = do_mknod,
+	.create = do_create,
+	//  .open = do_open,
+	//  .access = do_access,
 };
 
 int main(int argc, char *argv[])
