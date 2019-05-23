@@ -28,7 +28,7 @@
 #include "fs_support.h"
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
-
+static int do_unlink();
 static time_t check_time;
 
 // The attributes should come from the directory entry.
@@ -404,7 +404,7 @@ static int do_rename(const char *opath, const char *npath)
 	int odi = find_dir_entry(ofn);
 	dir_entry *ode = index2dir_entry(odi);
 
-	strncmp(ode->name, nfn, FS_NAME_LEN);
+	strncpy(ode->name, nfn, FS_NAME_LEN);
 	save_directory();
 
 	return 0; // reports success, but does nothing
