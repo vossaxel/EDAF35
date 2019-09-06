@@ -102,6 +102,25 @@ int first_empty_dir_entry() {
   // di contains the first empty entry in this block.
 }
 
+// Finds the first empty entry, after all the existing
+// entries, in the last_block seen as a directiry.
+// It returns the index of the entry.
+int last_dir_entry() {
+  unsigned short di = 0;
+  while(di < DIR_ENTRIES_PER_BLOCK){
+  	if(dir_entry_is_empty(bdir.directory[di])){
+		di--;
+		break;
+	}
+	di++;	
+	}
+  if(di <0 || di == DIR_ENTRIES_PER_BLOCK || dir_entry_is_empty(bdir.directory[di])){
+    return -1;
+  }else {
+	  return di;
+  }
+}
+
 // assuming the latest block is a directory, it returns a pointer to entry i
 dir_entry* index2dir_entry(unsigned short i) {
   return &bdir.directory[i];

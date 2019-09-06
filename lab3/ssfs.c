@@ -353,7 +353,7 @@ static int do_truncate(const char *path, off_t offset)
 		printf("  > file exits. truncate it.");
 
 		dir_entry *de = index2dir_entry(di);
-		de->size_bytes = 0;
+		de->size_bytes = offset;
 
 		// TODO: [TRUNC_FREE] also free the blocks of this file!
 		// load block map
@@ -369,8 +369,8 @@ static int do_truncate(const char *path, off_t offset)
 		{
 			//frees the block
 			//continues the loop because freeBlock returns next block in chain.
-			de->first_block = freeBlock(de->first_block, EOF_BLOCK);
-			//	de->first_block = bmap.blockmap[de->first_block];
+			de->first_block = free_block(de->first_block);
+			//de->first_block = bmap.blockmap[de->first_block];
 		}
 
 		save_blockmap();
@@ -402,6 +402,11 @@ static int do_rename(const char *opath, const char *npath)
 
 	const char *ofn = &opath[1];
 	int odi = find_dir_entry(ofn);
+
+	if(odi<0){
+		return -ENOENT;
+	}
+
 	dir_entry *ode = index2dir_entry(odi);
 
 	strncpy(ode->name, nfn, FS_NAME_LEN);
@@ -416,6 +421,9 @@ static int do_unlink(const char *path)
 	printf("--> Trying to remove %s\n", path);
 
 	load_directory();
+	
+	int li = last_dir_entry();
+		
 
 	// skip the "/" in the begining
 	const char *fn = &path[1];
@@ -428,6 +436,30 @@ static int do_unlink(const char *path)
 		return -ENOENT;
 	}
 	do_truncate(path, 0);
+
+
+	dir_entry* di_file = index2dir_entry(di);
+	dir_entry* li_file;	
+
+	if(li >= 0 && li != di){
+		li_file = index2dir_entry(li);
+		
+		strncpy(di_file->name, li_file->name, FS_NAME_LEN);
+		di_file->mode = li_file->mode;
+		di_file->size_bytes = li_file->size_bytes;
+		di_file->first_block = li_file->first_block;
+
+
+	}else{
+		li_file = di_file;
+	}
+	di_file->name[0] = 0;
+	di_file->mode = 0;
+	di_file->size_bytes = 0;
+	di_file->first_block = EOF_BLOCK;
+
+
+	save_directory();
 
 	return 0; // reports success, but does nothing
 }
