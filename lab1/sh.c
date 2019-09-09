@@ -36,6 +36,7 @@ static char *token;				   /* a token such as /bin/ls */
 static list_t *path_dir_list; /* list of directories in PATH. */
 static int input_fd;		  /* for i/o redirection or pipe. */
 static int output_fd;		  /* for i/o redirection or pipe */
+static char* olddir;
 
 /* fetch_line: read one line from user and put it in input_buf. */
 int fetch_line(char *prompt)
@@ -186,11 +187,11 @@ void run_program(char **argv, int argc, bool foreground, bool doing_pipe)
 	
 	if(strcmp(argv[0], "cd") == 0)
 	{
-		char * temp = getenv("PWD");
+		char * temp = get_current_dir_name();
 		if(strcmp(argv[1], "-") == 0)
 		{
-			
-			chdir(getenv("OLDPWD"));
+			chdir(olddir);
+			olddir = temp;
 						
 		}
 		else if(chdir(argv[1]) != 0)
@@ -199,7 +200,7 @@ void run_program(char **argv, int argc, bool foreground, bool doing_pipe)
 	
 		}else
 		{
-			setenv("OLDPWD", temp,1);
+			olddir = temp;
 		}		
 	}
 
