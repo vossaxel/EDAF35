@@ -29,7 +29,6 @@
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 static int do_unlink();
-static time_t check_time;
 
 // The attributes should come from the directory entry.
 // TODO: [DIR_ENTRY] add last "m"odification time to the entry and handle it properly
@@ -53,13 +52,10 @@ static int do_getattr(const char *path, struct stat *st)
 	st->st_atime = time(NULL); // The last "a"ccess of the file/directory is right now
 	st->st_mtime = time(NULL); // The last "m"odification of the file/directory is right now
 
-	check_time = time(NULL);
-
 	if (strcmp(path, "/") == 0)
 	{
 		st->st_mode = S_IFDIR | 0755;
 		st->st_nlink = 2; // Why "two" hardlinks instead of "one"? The answer is here: http://unix.stackexchange.com/a/101536
-		st->st_mtime = check_time;
 	}
 	else
 	{
@@ -78,6 +74,7 @@ static int do_getattr(const char *path, struct stat *st)
 			printf("  -- %d > %.*s\n", di, FS_NAME_LEN, de->name);
 			st->st_size = de->size_bytes;
 			st->st_mode = de->mode;
+			st->st_mtime = de->mtime;
 		}
 		else
 		{
@@ -234,6 +231,7 @@ static int do_write(const char *path, const char *buffer, size_t size, off_t off
 		}
 		// update the size of the file
 		de->size_bytes = offset + size;
+		de->mtime = time(NULL);
 
 		// flush back the directory, since the file info changed
 		save_directory();
@@ -376,6 +374,7 @@ static int do_truncate(const char *path, off_t offset)
 		save_blockmap();
 
 		// must save directory changes to disk!
+		de->mtime = time(NULL);
 		save_directory();
 	}
 	return 0;
@@ -447,16 +446,19 @@ static int do_unlink(const char *path)
 		di_file->mode = li_file->mode;
 		di_file->size_bytes = li_file->size_bytes;
 		di_file->first_block = li_file->first_block;
+		di_file->mtime = li_file->mtime;
 		li_file->name[0] = 0;
 		li_file->mode = 0;
 		li_file->size_bytes = 0;
 		li_file->first_block = EOF_BLOCK;
+		li_file->mtime = 0;
 	}else{
 		li_file = di_file;
 		di_file->name[0] = 0;
 		di_file->mode = 0;
 		di_file->size_bytes = 0;
 		di_file->first_block = EOF_BLOCK;
+		di_file->mtime = 0;
 	}
 
 	save_directory();
@@ -492,6 +494,7 @@ static int do_create(const char *path, mode_t m, struct fuse_file_info *ffi)
 	de->mode = m; //S_IFREG | 0644;
 	de->size_bytes = 0;
 	de->first_block = EOF_BLOCK; // end of file block
+	de->mtime = time(NULL);
 
 	// must save directory changes to disk!
 	save_directory();
