@@ -438,7 +438,7 @@ static int do_unlink(const char *path)
 
 
 	dir_entry* di_file = index2dir_entry(di);
-	dir_entry* li_file;	
+	dir_entry* li_file = di_file;	
 
 	if(li >= 0 && li != di){
 		li_file = index2dir_entry(li);
@@ -447,20 +447,13 @@ static int do_unlink(const char *path)
 		di_file->size_bytes = li_file->size_bytes;
 		di_file->first_block = li_file->first_block;
 		di_file->mtime = li_file->mtime;
-		li_file->name[0] = 0;
-		li_file->mode = 0;
-		li_file->size_bytes = 0;
-		li_file->first_block = EOF_BLOCK;
-		li_file->mtime = 0;
-	}else{
-		li_file = di_file;
-		di_file->name[0] = 0;
-		di_file->mode = 0;
-		di_file->size_bytes = 0;
-		di_file->first_block = EOF_BLOCK;
-		di_file->mtime = 0;
 	}
 
+	li_file->name[0] = 0;
+	li_file->mode = 0;
+	li_file->size_bytes = 0;
+	li_file->first_block = EOF_BLOCK;
+	li_file->mtime = 0;
 	save_directory();
 
 	return 0; // reports success, but does nothing
