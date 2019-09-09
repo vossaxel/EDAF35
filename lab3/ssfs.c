@@ -443,21 +443,21 @@ static int do_unlink(const char *path)
 
 	if(li >= 0 && li != di){
 		li_file = index2dir_entry(li);
-		
 		strncpy(di_file->name, li_file->name, FS_NAME_LEN);
 		di_file->mode = li_file->mode;
 		di_file->size_bytes = li_file->size_bytes;
 		di_file->first_block = li_file->first_block;
-
-
+		li_file->name[0] = 0;
+		li_file->mode = 0;
+		li_file->size_bytes = 0;
+		li_file->first_block = EOF_BLOCK;
 	}else{
 		li_file = di_file;
+		di_file->name[0] = 0;
+		di_file->mode = 0;
+		di_file->size_bytes = 0;
+		di_file->first_block = EOF_BLOCK;
 	}
-	di_file->name[0] = 0;
-	di_file->mode = 0;
-	di_file->size_bytes = 0;
-	di_file->first_block = EOF_BLOCK;
-
 
 	save_directory();
 
